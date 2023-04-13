@@ -14,11 +14,11 @@ setup(
         },
         install_requires = [
             'countess>=0.0.1',
+            'mappy~=2.24',
         ],
         license_files = ('LICENSE.txt',),
         classifiers = [
             'Intended Audience :: Science/Research',
-            'License :: Public Domain',
             'Operating System :: OS Independent',
             'Topic :: Scientific/Engineering :: Bio-Informatics',
         ],
