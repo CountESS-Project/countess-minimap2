@@ -1,4 +1,4 @@
-# CountESS MiniMap2 Plugin v0.0.2
+# CountESS MiniMap2 Plugin v0.0.3
 
 This is a plugin to allow [MiniMap2](https://github.com/lh3/minimap2) 
 to be used from within [CountESS](https://github.com/CountESS-Project/CountESS/)
@@ -37,6 +37,12 @@ The matched location.
 ### `mm_r_st`, `mm_r_en`
 
 Start and end positions of the matched sequence.
+
+### `mm_strand`
+
+`1` if query/target on the same strand.
+`-1` if opposite.
+`0` if unknown.
 
 ### `mm_cigar`
 

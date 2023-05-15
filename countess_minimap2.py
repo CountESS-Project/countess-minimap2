@@ -40,7 +40,7 @@ def cs_to_hgvs(cs_string, offset=1):
             hgvs_ops.append(f"{offset}del")
             offset += 1
     if len(hgvs_ops) == 0:
-        return "g.="
+        return "g.{offset}="
     elif len(hgvs_ops) == 1:
         return "g." + hgvs_ops[0]
     else:
@@ -57,7 +57,7 @@ class MiniMap2Plugin(PandasTransformPlugin):
         Finds variants using Minimap2.  Note that the CIGAR string doesn't always
         show all variants.
     """
-    version = "0.0.2"
+    version = "0.0.3"
     link = "https://github.com/nickzoic/countess-minimap2#readme"
 
     FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa(sta)?")]
@@ -98,13 +98,15 @@ class MiniMap2Plugin(PandasTransformPlugin):
             x = aligner.map(row[column_name], cs=True)
             for z in x:
                 if z.r_en - z.r_st >= min_length:
-                    return [z.ctg, z.r_st, z.r_en, z.cigar_str, z.cs, cs_to_hgvs(z.cs, z.r_st+1)]
+                    return [z.ctg, z.r_st, z.r_en, z.strand, z.cigar_str, z.cs, \
+                            cs_to_hgvs(z.cs, z.r_st+1)]
             return [None, 0, 0, None, None, None]
 
         column_names = [
             prefix + "_ctg",
             prefix + "_r_st",
             prefix + "_r_en",
+            prefix + "_r_strand",
             prefix + "_cigar",
             prefix + "_cs",
             prefix + "_hgvs",
