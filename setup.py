@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
         name = 'CountESS Plugin: Minimap2 Wrapper',
-        version = '0.0.2',
+        version = '0.0.3',
         author = 'Nick Moore',
         maintainer = 'Nick Moore',
         maintainer_email = 'nick@zoic.org',
