@@ -1,8 +1,10 @@
+""" CountESS Minimap2 Plugin"""
+
 import re
 
 import pandas as pd
 
-import mappy
+import mappy  # type: ignore
 
 from countess.core.logger import Logger
 from countess.core.parameters import (
@@ -15,11 +17,15 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformPlugin
 
+VERSION = '0.0.4'
+
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
 
 
 def cs_to_hgvs(cs_string, offset=1):
+    """Turn the Minimap2 "difference string" into a HGVS string"""
+
     hgvs_ops = []
     for op in re.findall(CS_STRING_RE, cs_string.upper()):
         if op[0] == ":":
@@ -46,7 +52,6 @@ def cs_to_hgvs(cs_string, offset=1):
     else:
         return "g.[" + ";".join(hgvs_ops) + "]"
 
-
 class MiniMap2Plugin(PandasTransformPlugin):
     """Turns a DNA sequence into a HGVS variant code"""
 
@@ -57,7 +62,7 @@ class MiniMap2Plugin(PandasTransformPlugin):
         Finds variants using Minimap2.  Note that the CIGAR string doesn't always
         show all variants.
     """
-    version = "0.0.3"
+    version = VERSION
     link = "https://github.com/nickzoic/countess-minimap2#readme"
 
     FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa(sta)?")]
@@ -72,6 +77,9 @@ class MiniMap2Plugin(PandasTransformPlugin):
     }
 
     def run_df(self, df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
+
+        assert isinstance(self.parameters['column'], ColumnOrIndexChoiceParam)
+
         prefix = self.parameters["prefix"].value
 
         aligner = mappy.Aligner(

@@ -1,0 +1,47 @@
+[project]
+name = 'countess-minimap2'
+dynamic = ["version"]
+readme = "README.md"
+authors = [
+    { name = "Nick Moore", email="nick@zoic.org" },
+]
+maintainers = [
+    { name = "Nick Moore", email="nick@zoic.org" },
+]
+description = "CountESS Minimap2 Plugin"
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause" }
+classifiers = [
+    'Development Status :: 2 - Pre-Alpha',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: BSD License',
+    'Operating System :: OS Independent',
+    'Topic :: Scientific/Engineering :: Bio-Informatics',
+]
+dependencies = [
+    "countess>=0.0.26,<0.1",
+    "mappy~=2.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "countess[dev]>=0.0.26,<0.1",
+]
+
+[project.entry-points.countess_plugins]
+minimap2 = "countess_minimap2:MiniMap2Plugin"
+
+[tool.setuptools.dynamic]
+version = { attr = "countess_minimap2.VERSION" }
+readme = { file = "README.md", content-type="text/markdown" }
+
+[tool.pylint]
+disable = [
+    "no-else-return",
+    "fixme",
+    "invalid-name",
+    "c-extension-no-member",
+]
+
+[tool.black]
+line-length = 100
