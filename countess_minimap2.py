@@ -1,6 +1,7 @@
 """ CountESS Minimap2 Plugin"""
 
 import re
+from typing import Any, Mapping, Optional
 
 import pandas as pd
 
@@ -17,13 +18,13 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformPlugin
 
-VERSION = '0.0.4'
+VERSION = '0.0.5'
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
 
 
-def cs_to_hgvs(cs_string, offset=1):
+def cs_to_hgvs(cs_string: str, offset: int=1) -> str:
     """Turn the Minimap2 "difference string" into a HGVS string"""
 
     hgvs_ops = []
@@ -101,14 +102,14 @@ class MiniMap2Plugin(PandasTransformPlugin):
         prefix = self.parameters["prefix"].value
         min_length = self.parameters["min_length"].value
 
-        def process(row):
+        def process(row: Mapping[str, Any]) -> tuple[Optional[str], int, int, int, Optional[str], Optional[str], Optional[str]]:
             # XXX only returns first match
             x = aligner.map(row[column_name], cs=True)
             for z in x:
                 if z.r_en - z.r_st >= min_length:
-                    return [z.ctg, z.r_st, z.r_en, z.strand, z.cigar_str, z.cs, \
-                            cs_to_hgvs(z.cs, z.r_st+1)]
-            return [None, 0, 0, None, None, None]
+                    return (z.ctg, z.r_st, z.r_en, z.strand, z.cigar_str, z.cs, \
+                            cs_to_hgvs(z.cs, z.r_st+1))
+            return (None, 0, 0, 0, None, None, None)
 
         column_names = [
             prefix + "_ctg",
