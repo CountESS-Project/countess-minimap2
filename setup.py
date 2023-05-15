@@ -1,7 +1,8 @@
 from setuptools import setup
 
 setup(
-        name = 'CountESS Plugin: Minimap2 Wrapper',
+        name = 'countess-minimap2',
+        description = 'CountESS Plugin: Minimap2 Wrapper',
         version = '0.0.3',
         author = 'Nick Moore',
         maintainer = 'Nick Moore',
@@ -16,6 +17,11 @@ setup(
             'countess>=0.0.26,<0.1',
             'mappy~=2.24',
         ],
+        extras_require = {
+            "dev": [
+                "countess[dev]>=0.0.26,<0.1",
+            ]
+        },
         license_files = ('LICENSE.txt',),
         classifiers = [
             'Intended Audience :: Science/Research',
