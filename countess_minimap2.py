@@ -11,7 +11,7 @@ from countess.core.logger import Logger
 from countess.core.parameters import (
     BooleanParam,
     ChoiceParam,
-    ColumnOrIndexChoiceParam,
+    ColumnChoiceParam,
     IntegerParam,
     StringParam,
     FileParam,
@@ -69,7 +69,7 @@ class MiniMap2Plugin(PandasTransformPlugin):
     FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa(sta)?")]
 
     parameters = {
-        "column": ColumnOrIndexChoiceParam("Input Column", "sequence"),
+        "column": ColumnChoiceParam("Input Column", "sequence"),
         "prefix": StringParam("Output Column Prefix", "mm"),
         "ref": FileParam("Ref FA / Ref MMI", file_types = FILE_TYPES),
         "preset": ChoiceParam("Preset", "sr", choices=MM2_PRESET_CHOICES),
@@ -79,8 +79,9 @@ class MiniMap2Plugin(PandasTransformPlugin):
 
     def run_df(self, df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
 
-        assert isinstance(self.parameters['column'], ColumnOrIndexChoiceParam)
+        assert isinstance(self.parameters['column'], ColumnChoiceParam)
 
+        column = self.parameters['column'].get_column(df)
         prefix = self.parameters["prefix"].value
 
         aligner = mappy.Aligner(
@@ -91,41 +92,37 @@ class MiniMap2Plugin(PandasTransformPlugin):
             logger.error("ERROR: failed to load/build index file")
             return pd.DataFrame()
 
-        df = df.copy()
-
-        if self.parameters["column"].is_index():
-            df["__index"] = df.index
-            column_name = "__index"
-        else:
-            column_name = self.parameters["column"].value
-
         prefix = self.parameters["prefix"].value
         min_length = self.parameters["min_length"].value
 
-        def process(row: Mapping[str, Any]) -> tuple[Optional[str], int, int, int, Optional[str], Optional[str], Optional[str]]:
+        def process(value: str) -> pd.Series:
             # XXX only returns first match
-            x = aligner.map(row[column_name], cs=True)
+            x = aligner.map(value, cs=True)
             for z in x:
                 if z.r_en - z.r_st >= min_length:
-                    return (z.ctg, z.r_st, z.r_en, z.strand, z.cigar_str, z.cs, \
-                            cs_to_hgvs(z.cs, z.r_st+1))
-            return (None, 0, 0, 0, None, None, None)
+                    return pd.Series({
+                        prefix + "_ctg": z.ctg,
+                        prefix + "_r_st": z.r_st,
+                        prefix + "_r_en": z.r_en,
+                        prefix + "_strand": z.strand,
+                        prefix + "_cigar": z.cigar_str,
+                        prefix + "_cs": z.cs,
+                        prefix + "_hgvs": cs_to_hgvs(z.cs, z.r_st+1),
+                    })
+            return pd.Series({
+                prefix + "_ctg": None,
+                prefix + "_r_st": 0,
+                prefix + "_r_en": 0,
+                prefix + "_strand": 0,
+                prefix + "_cigar": "",
+                prefix + "_cs": "",
+                prefix + "_hgvs": "",
+            })
 
-        column_names = [
-            prefix + "_ctg",
-            prefix + "_r_st",
-            prefix + "_r_en",
-            prefix + "_r_strand",
-            prefix + "_cigar",
-            prefix + "_cs",
-            prefix + "_hgvs",
-        ]
-        df[column_names] = df.apply(process, axis=1, result_type="expand")
 
-        if self.parameters["column"].is_index():
-            df.drop(columns=["__index"])
+        df = df.join(column.apply(process, convert_dtype=True))
 
         if self.parameters["drop"].value:
-            df = df.query("mm_ctg.notnull()")
+            df = df.dropna(subset=[prefix + "_ctg"])
 
         return df
