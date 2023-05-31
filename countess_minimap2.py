@@ -18,7 +18,7 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformPlugin
 
-VERSION = '0.0.5'
+VERSION = '0.0.6'
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]

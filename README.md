@@ -1,4 +1,4 @@
-# CountESS MiniMap2 Plugin v0.0.5
+# CountESS MiniMap2 Plugin v0.0.6
 
 This is a plugin to allow [MiniMap2](https://github.com/lh3/minimap2) 
 to be used from within [CountESS](https://github.com/CountESS-Project/CountESS/)
