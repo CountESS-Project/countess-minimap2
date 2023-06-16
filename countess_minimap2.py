@@ -14,11 +14,12 @@ from countess.core.parameters import (
     ColumnChoiceParam,
     IntegerParam,
     StringParam,
+    StringCharacterSetParam,
     FileParam,
 )
 from countess.core.plugins import PandasTransformPlugin
 
-VERSION = '0.0.6'
+VERSION = '0.0.7'
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
@@ -66,13 +67,14 @@ class MiniMap2Plugin(PandasTransformPlugin):
     version = VERSION
     link = "https://github.com/nickzoic/countess-minimap2#readme"
 
-    FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa *.fasta")]
+    FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa *.fasta *.fa.gz *.fasta.gz")]
+    CHARACTER_SET = set(['A', 'C', 'G', 'T'])
 
     parameters = {
         "column": ColumnChoiceParam("Input Column", "sequence"),
         "prefix": StringParam("Output Column Prefix", "mm"),
         "ref": FileParam("Ref FA / Ref MMI", file_types = FILE_TYPES),
-        "seq": StringParam("*OR* Ref Sequence", ""),
+        "seq": StringCharacterSetParam("*OR* Ref Sequence", character_set=CHARACTER_SET),
         "preset": ChoiceParam("Preset", "sr", choices=MM2_PRESET_CHOICES),
         "min_length": IntegerParam("Minimum Match Length", 0),
         "drop": BooleanParam("Drop Unmatched", False),

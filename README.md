@@ -1,4 +1,4 @@
-# CountESS MiniMap2 Plugin v0.0.6
+# CountESS MiniMap2 Plugin v0.0.7
 
 This is a plugin to allow [MiniMap2](https://github.com/lh3/minimap2) 
 to be used from within [CountESS](https://github.com/CountESS-Project/CountESS/)
@@ -15,6 +15,11 @@ The default output column prefix is `mm` but this can be changed.
 ### Ref FA / Ref MMI
 
 A local FASTA or MMI file to look up the sequences in.
+Acceptable formats are MMI or FASTA, optionally gzipped.
+
+### Req Sequence
+
+Alternatively, enter a single reference DNA sequence directly here.
 
 ### Preset
 
