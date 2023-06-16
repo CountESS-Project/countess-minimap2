@@ -1,7 +1,7 @@
 """ CountESS Minimap2 Plugin"""
 
 import re
-from typing import Any, Mapping, Optional
+from typing import Mapping, Optional
 
 import pandas as pd
 
@@ -47,7 +47,7 @@ def cs_to_hgvs(cs_string: str, offset: int=1) -> str:
             hgvs_ops.append(f"{offset}del")
             offset += 1
     if len(hgvs_ops) == 0:
-        return "g.{offset}="
+        return "g.="
     elif len(hgvs_ops) == 1:
         return "g." + hgvs_ops[0]
     else:
@@ -66,12 +66,13 @@ class MiniMap2Plugin(PandasTransformPlugin):
     version = VERSION
     link = "https://github.com/nickzoic/countess-minimap2#readme"
 
-    FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa(sta)?")]
+    FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa *.fasta")]
 
     parameters = {
         "column": ColumnChoiceParam("Input Column", "sequence"),
         "prefix": StringParam("Output Column Prefix", "mm"),
         "ref": FileParam("Ref FA / Ref MMI", file_types = FILE_TYPES),
+        "seq": StringParam("*OR* Ref Sequence", ""),
         "preset": ChoiceParam("Preset", "sr", choices=MM2_PRESET_CHOICES),
         "min_length": IntegerParam("Minimum Match Length", 0),
         "drop": BooleanParam("Drop Unmatched", False),
@@ -84,9 +85,16 @@ class MiniMap2Plugin(PandasTransformPlugin):
         column = self.parameters['column'].get_column(df)
         prefix = self.parameters["prefix"].value
 
-        aligner = mappy.Aligner(
-            self.parameters["ref"].value, preset=self.parameters["preset"].value
-        )
+        if self.parameters["seq"].value:
+            aligner = mappy.Aligner(
+                seq=self.parameters["seq"].value, preset=self.parameters["preset"].value
+            )
+        elif self.parameters["ref"].value:
+            aligner = mappy.Aligner(
+                self.parameters["ref"].value, preset=self.parameters["preset"].value
+            )
+        else:
+            aligner = None
 
         if not aligner:
             logger.error("ERROR: failed to load/build index file")
@@ -119,8 +127,8 @@ class MiniMap2Plugin(PandasTransformPlugin):
                 prefix + "_hgvs": "",
             })
 
-
-        df = df.join(column.apply(process, convert_dtype=True))
+        dfx = column.apply(process, convert_dtype=True)
+        df = df.assign(**dict( (name, dfx[name]) for name in dfx.columns))
 
         if self.parameters["drop"].value:
             df = df.dropna(subset=[prefix + "_ctg"])
