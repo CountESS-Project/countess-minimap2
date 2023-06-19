@@ -19,7 +19,7 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformPlugin
 
-VERSION = '0.0.7'
+VERSION = '0.0.8'
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
@@ -65,7 +65,7 @@ class MiniMap2Plugin(PandasTransformPlugin):
         show all variants.
     """
     version = VERSION
-    link = "https://github.com/nickzoic/countess-minimap2#readme"
+    link = "https://github.com/CountESS-Project/countess-minimap2#readme"
 
     FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa *.fasta *.fa.gz *.fasta.gz")]
     CHARACTER_SET = set(['A', 'C', 'G', 'T'])
