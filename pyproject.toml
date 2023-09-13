@@ -19,13 +19,13 @@ classifiers = [
     'Topic :: Scientific/Engineering :: Bio-Informatics',
 ]
 dependencies = [
-    "countess>=0.0.30,<0.1",
-    "mappy~=2.24",
+    "countess>=0.0.35,<0.1",
+    "mappy~=2.26",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "countess[dev]>=0.0.30,<0.1",
+    "countess[dev]>=0.0.35,<0.1",
 ]
 
 [project.entry-points.countess_plugins]
@@ -44,4 +44,4 @@ disable = [
 ]
 
 [tool.black]
-line-length = 100
+line-length = 120

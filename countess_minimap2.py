@@ -3,29 +3,27 @@
 import re
 from typing import Mapping, Optional
 
-import pandas as pd
-
 import mappy  # type: ignore
-
+import pandas as pd
 from countess.core.logger import Logger
 from countess.core.parameters import (
     BooleanParam,
     ChoiceParam,
     ColumnChoiceParam,
-    IntegerParam,
-    StringParam,
-    StringCharacterSetParam,
     FileParam,
+    IntegerParam,
+    StringCharacterSetParam,
+    StringParam,
 )
-from countess.core.plugins import PandasTransformPlugin
+from countess.core.plugins import PandasTransformSingleToDictPlugin
 
-VERSION = '0.0.8'
+VERSION = "0.0.9"
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
 
 
-def cs_to_hgvs(cs_string: str, offset: int=1) -> str:
+def cs_to_hgvs(cs_string: str, offset: int = 1) -> str:
     """Turn the Minimap2 "difference string" into a HGVS string"""
 
     hgvs_ops = []
@@ -54,72 +52,67 @@ def cs_to_hgvs(cs_string: str, offset: int=1) -> str:
     else:
         return "g.[" + ";".join(hgvs_ops) + "]"
 
-class MiniMap2Plugin(PandasTransformPlugin):
+
+class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
     """Turns a DNA sequence into a HGVS variant code"""
 
     # XXX what is up with the CIGAR string not showing all variants?
 
     name = "MiniMap2 Plugin"
-    description = """
-        Finds variants using Minimap2.  Note that the CIGAR string doesn't always
-        show all variants.
-    """
+    description = "Finds variants using Minimap2"
+    additional = "Note that the CIGAR string doesn't always show all variants."
     version = VERSION
     link = "https://github.com/CountESS-Project/countess-minimap2#readme"
 
     FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa *.fasta *.fa.gz *.fasta.gz")]
-    CHARACTER_SET = set(['A', 'C', 'G', 'T'])
+    CHARACTER_SET = set(["A", "C", "G", "T"])
 
     parameters = {
         "column": ColumnChoiceParam("Input Column", "sequence"),
         "prefix": StringParam("Output Column Prefix", "mm"),
-        "ref": FileParam("Ref FA / Ref MMI", file_types = FILE_TYPES),
+        "ref": FileParam("Ref FA / Ref MMI", file_types=FILE_TYPES),
         "seq": StringCharacterSetParam("*OR* Ref Sequence", character_set=CHARACTER_SET),
         "preset": ChoiceParam("Preset", "sr", choices=MM2_PRESET_CHOICES),
         "min_length": IntegerParam("Minimum Match Length", 0),
         "drop": BooleanParam("Drop Unmatched", False),
     }
 
-    def run_df(self, df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
+    aligner = None
 
-        assert isinstance(self.parameters['column'], ColumnChoiceParam)
-
-        column = self.parameters['column'].get_column(df)
-        prefix = self.parameters["prefix"].value
-
+    def prepare(self, sources: list[str], row_limit: Optional[int]):
         if self.parameters["seq"].value:
-            aligner = mappy.Aligner(
-                seq=self.parameters["seq"].value, preset=self.parameters["preset"].value
-            )
+            self.aligner = mappy.Aligner(seq=self.parameters["seq"].value, preset=self.parameters["preset"].value)
         elif self.parameters["ref"].value:
-            aligner = mappy.Aligner(
-                self.parameters["ref"].value, preset=self.parameters["preset"].value
-            )
+            self.aligner = mappy.Aligner(self.parameters["ref"].value, preset=self.parameters["preset"].value)
         else:
-            aligner = None
+            self.aligner = None
 
-        if not aligner:
-            logger.error("ERROR: failed to load/build index file")
-            return pd.DataFrame()
+    def process_value(self, value: str, logger: Logger):
+        assert isinstance(self.parameters["column"], ColumnChoiceParam)
+        if not self.aligner:
+            return None
 
         prefix = self.parameters["prefix"].value
         min_length = self.parameters["min_length"].value
 
-        def process(value: str) -> pd.Series:
-            # XXX only returns first match
-            x = aligner.map(value, cs=True)
-            for z in x:
-                if z.r_en - z.r_st >= min_length:
-                    return pd.Series({
-                        prefix + "_ctg": z.ctg,
-                        prefix + "_r_st": z.r_st,
-                        prefix + "_r_en": z.r_en,
-                        prefix + "_strand": z.strand,
-                        prefix + "_cigar": z.cigar_str,
-                        prefix + "_cs": z.cs,
-                        prefix + "_hgvs": cs_to_hgvs(z.cs, z.r_st+1),
-                    })
-            return pd.Series({
+        # XXX only returns first match
+        x = self.aligner.map(value, cs=True)
+        for z in x:
+            if z.r_en - z.r_st >= min_length:
+                return {
+                    prefix + "_ctg": z.ctg,
+                    prefix + "_r_st": z.r_st,
+                    prefix + "_r_en": z.r_en,
+                    prefix + "_strand": z.strand,
+                    prefix + "_cigar": z.cigar_str,
+                    prefix + "_cs": z.cs,
+                    prefix + "_hgvs": cs_to_hgvs(z.cs, z.r_st + 1),
+                }
+
+        if self.parameters["drop"].value:
+            return None
+        else:
+            return {
                 prefix + "_ctg": None,
                 prefix + "_r_st": 0,
                 prefix + "_r_en": 0,
@@ -127,12 +120,4 @@ class MiniMap2Plugin(PandasTransformPlugin):
                 prefix + "_cigar": "",
                 prefix + "_cs": "",
                 prefix + "_hgvs": "",
-            })
-
-        dfx = column.apply(process, convert_dtype=True)
-        df = df.assign(**dict( (name, dfx[name]) for name in dfx.columns))
-
-        if self.parameters["drop"].value:
-            df = df.dropna(subset=[prefix + "_ctg"])
-
-        return df
+            }
