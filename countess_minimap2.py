@@ -17,16 +17,57 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformSingleToDictPlugin
 
-VERSION = "0.0.9"
+VERSION = "0.0.10"
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
 
 
-def cs_to_hgvs(cs_string: str, offset: int = 1) -> str:
-    """Turn the Minimap2 "difference string" into a HGVS string"""
+def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
+    """Turn the Minimap2 "difference string" into a HGVS string
+
+    The only reference I have for the "difference string" is from the `minimap2`
+    manual page https://lh3.github.io/minimap2/minimap2.html#10 which contains
+    the following description:
+
+       The cs tag encodes difference sequences in the short form or the entire
+       query AND reference sequences in the  long  form.  It consists of a
+       series of operations:
+
+       ┌───┬────────────────────────────┬─────────────────────────────────┐
+       │Op │           Regex            │           Description           │
+       ├───┼────────────────────────────┼─────────────────────────────────┤
+       │ = │ [ACGTN]+                   │ Identical sequence (long form)  │
+       │ : │ [0-9]+                     │ Identical sequence length       │
+       │ * │ [acgtn][acgtn]             │ Substitution: ref to query      │
+       │ + │ [acgtn]+                   │ Insertion to the reference      │
+       │ - │ [acgtn]+                   │ Deletion from the reference     │
+       │ ~ │ [acgtn]{2}[0-9]+[acgtn]{2} │ Intron length and splice signal │
+       └───┴────────────────────────────┴─────────────────────────────────┘
+
+    >>> cs_to_hgvs(":10*at:10")
+    'g.11A>T'
+
+    >>> cs_to_hgvs(":10-c:10")
+    'g.11del'
+
+    >>> cs_to_hgvs(":10-ttt:10")
+    'g.11_13del'
+
+    >>> cs_to_hgvs(":10+gac:10")
+    'g.10_11insGAC'
+
+    >>> cs_to_hgvs(":10*at*at*gc*cg")
+    'g.11_14delinsTTCG'
+    """
+
+    # XXX doesn't support '~'.
 
     hgvs_ops = []
+    prefix = "g."
+    if ctg:
+        prefix = ctg + ":" + prefix
+
     for op in re.findall(CS_STRING_RE, cs_string.upper()):
         if op[0] == ":":
             offset += int(op[1:])
@@ -35,22 +76,25 @@ def cs_to_hgvs(cs_string: str, offset: int = 1) -> str:
         elif op[0] == "*":
             # regex can match multiple operations like "*AT*AT*GC"
             if len(op) > 3:
-                hgvs_ops.append(f"{offset}delins{op[2::3]}")
+                hgvs_ops.append(f"{offset}_{offset+len(op)//3-1}delins{op[2::3]}")
             else:
                 hgvs_ops.append(f"{offset}{op[1]}>{op[2]}")
             offset += len(op) // 3
         elif op[0] == "+":
-            hgvs_ops.append(f"{offset}_{offset+1}ins{op[1]}")
+            hgvs_ops.append(f"{offset-1}_{offset}ins{op[1:]}")
             offset += 1
         elif op[0] == "-":
-            hgvs_ops.append(f"{offset}del")
-            offset += 1
+            if len(op) > 2:
+                hgvs_ops.append(f"{offset}_{offset+len(op)-2}del")
+            else:
+                hgvs_ops.append(f"{offset}del")
+            offset += len(op)
     if len(hgvs_ops) == 0:
-        return "g.="
+        return prefix + "="
     elif len(hgvs_ops) == 1:
-        return "g." + hgvs_ops[0]
+        return prefix + hgvs_ops[0]
     else:
-        return "g.[" + ";".join(hgvs_ops) + "]"
+        return prefix + "[" + ";".join(hgvs_ops) + "]"
 
 
 class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
@@ -75,8 +119,14 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
         "preset": ChoiceParam("Preset", "sr", choices=MM2_PRESET_CHOICES),
         "min_length": IntegerParam("Minimum Match Length", 0),
         "drop": BooleanParam("Drop Unmatched", False),
+        "location": BooleanParam("Output Location Columns", True),
+        "cigar": BooleanParam("Output Cigar String", True),
+        "cs": BooleanParam("Output CS String", False),
+        "hgvs": BooleanParam("Output HGVS String", False),
     }
 
+    # XXX a shared-memory cache would make a lot of sense
+    # here ...
     aligner = None
 
     def prepare(self, sources: list[str], row_limit: Optional[int]):
@@ -87,6 +137,26 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
         else:
             self.aligner = None
 
+    def output_dict(self, alignment):
+        d = {}
+        prefix = self.parameters["prefix"].value
+        if self.parameters["location"].value:
+            d.update(
+                {
+                    prefix + "_ctg": alignment.ctg if alignment else None,
+                    prefix + "_r_st": alignment.r_st if alignment else None,
+                    prefix + "_r_en": alignment.r_en if alignment else None,
+                    prefix + "_strand": alignment.strand if alignment else None,
+                }
+            )
+        if self.parameters["cigar"].value:
+            d[prefix + "_cigar"] = alignment.cigar_str if alignment else None
+        if self.parameters["cs"].value:
+            d[prefix + "_cs"] = alignment.cs if alignment else None
+        if self.parameters["hgvs"].value:
+            d[prefix + "_hgvs"] = cs_to_hgvs(alignment.cs, alignment.ctg, alignment.r_st + 1) if alignment else None
+        return d
+
     def process_value(self, value: str, logger: Logger):
         assert isinstance(self.parameters["column"], ColumnChoiceParam)
         if not self.aligner:
@@ -96,28 +166,13 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
         min_length = self.parameters["min_length"].value
 
         # XXX only returns first match
-        x = self.aligner.map(value, cs=True)
+        calculate_cs = self.parameters["cs"].value or self.parameters["hgvs"].value
+        x = self.aligner.map(value, cs=calculate_cs)
         for z in x:
             if z.r_en - z.r_st >= min_length:
-                return {
-                    prefix + "_ctg": z.ctg,
-                    prefix + "_r_st": z.r_st,
-                    prefix + "_r_en": z.r_en,
-                    prefix + "_strand": z.strand,
-                    prefix + "_cigar": z.cigar_str,
-                    prefix + "_cs": z.cs,
-                    prefix + "_hgvs": cs_to_hgvs(z.cs, z.r_st + 1),
-                }
+                return self.output_dict(z)
 
         if self.parameters["drop"].value:
             return None
         else:
-            return {
-                prefix + "_ctg": None,
-                prefix + "_r_st": 0,
-                prefix + "_r_en": 0,
-                prefix + "_strand": 0,
-                prefix + "_cigar": "",
-                prefix + "_cs": "",
-                prefix + "_hgvs": "",
-            }
+            return self.output_dict(None)
