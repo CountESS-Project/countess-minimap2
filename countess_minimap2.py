@@ -107,6 +107,7 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
     additional = "Note that the CIGAR string doesn't always show all variants."
     version = VERSION
     link = "https://github.com/CountESS-Project/countess-minimap2#readme"
+    tags = ['bioinformatics']
 
     FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa *.fasta *.fa.gz *.fasta.gz")]
     CHARACTER_SET = set(["A", "C", "G", "T"])
