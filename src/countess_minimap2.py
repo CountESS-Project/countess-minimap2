@@ -17,7 +17,7 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformSingleToDictPlugin
 
-VERSION = "0.0.10"
+VERSION = "0.0.11"
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
