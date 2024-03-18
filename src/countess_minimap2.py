@@ -17,7 +17,7 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformSingleToDictPlugin
 
-VERSION = "0.0.11"
+VERSION = "0.0.12"
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
@@ -65,7 +65,7 @@ def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
 
     hgvs_ops = []
     prefix = "g."
-    if ctg:
+    if ctg and ctg != 'N/A':
         prefix = ctg + ":" + prefix
 
     for op in re.findall(CS_STRING_RE, cs_string.upper()):
