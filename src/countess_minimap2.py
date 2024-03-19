@@ -45,6 +45,10 @@ def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
        │ ~ │ [acgtn]{2}[0-9]+[acgtn]{2} │ Intron length and splice signal │
        └───┴────────────────────────────┴─────────────────────────────────┘
 
+    Note that the HGVS output isn't necessarily exactly the same as other callers
+    as the CS string tends to match leftwards where HGVS is supposed to match
+    rightwards.
+
     >>> cs_to_hgvs(":10*at:10")
     'g.11A>T'
 
@@ -59,6 +63,12 @@ def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
 
     >>> cs_to_hgvs(":10*at*at*gc*cg")
     'g.11_14delinsTTCG'
+
+    >>> cs_to_hgvs(":10+a:10*at")
+    'g.[10_11insA;21A>T]'
+
+    >>> cs_to_hgvs(":10-a:10*at")
+    'g.[11del;22A>T]'
     """
 
     # XXX doesn't support '~'.
@@ -82,13 +92,12 @@ def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
             offset += len(op) // 3
         elif op[0] == "+":
             hgvs_ops.append(f"{offset-1}_{offset}ins{op[1:]}")
-            offset += 1
         elif op[0] == "-":
             if len(op) > 2:
                 hgvs_ops.append(f"{offset}_{offset+len(op)-2}del")
             else:
                 hgvs_ops.append(f"{offset}del")
-            offset += len(op)
+            offset += len(op) - 1
     if len(hgvs_ops) == 0:
         return prefix + "="
     elif len(hgvs_ops) == 1:
