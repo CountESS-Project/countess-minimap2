@@ -17,7 +17,7 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformSingleToDictPlugin
 
-VERSION = "0.0.12"
+VERSION = "0.0.13"
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
@@ -46,8 +46,8 @@ def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
        └───┴────────────────────────────┴─────────────────────────────────┘
 
     Note that the HGVS output isn't necessarily exactly the same as other callers
-    as the CS string tends to match leftwards where HGVS is supposed to match
-    rightwards.
+    as the CS string tends to find changes leftwards where HGVS is supposed to
+    work rightwards.
 
     >>> cs_to_hgvs(":10*at:10")
     'g.11A>T'
@@ -72,6 +72,9 @@ def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
     """
 
     # XXX doesn't support '~'.
+
+    # XXX consider a different approach to generating HGVS strings
+    # https://github.com/CountESS-Project/countess-minimap2/issues/1
 
     hgvs_ops = []
     prefix = "g."
