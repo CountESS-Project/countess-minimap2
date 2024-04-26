@@ -16,11 +16,12 @@ classifiers = [
     'Intended Audience :: Science/Research',
     'License :: OSI Approved :: BSD License',
     'Operating System :: OS Independent',
+    'Programming Language :: Python :: 3',
     'Topic :: Scientific/Engineering :: Bio-Informatics',
 ]
 dependencies = [
     "countess>=0.0.35,<0.1",
-    "mappy~=2.26",
+    "mappy @ git+https://github.com/nickzoic/minimap2/@nickzoic/combined",
 ]
 
 [project.urls]

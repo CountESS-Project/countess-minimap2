@@ -16,97 +16,11 @@ from countess.core.parameters import (
     StringParam,
 )
 from countess.core.plugins import PandasTransformSingleToDictPlugin
+from countess.utils.variant import find_variant_string
 
 VERSION = "0.0.13"
 
-CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
-
-
-def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
-    """Turn the Minimap2 "difference string" into a HGVS string
-
-    The only reference I have for the "difference string" is from the `minimap2`
-    manual page https://lh3.github.io/minimap2/minimap2.html#10 which contains
-    the following description:
-
-       The cs tag encodes difference sequences in the short form or the entire
-       query AND reference sequences in the  long  form.  It consists of a
-       series of operations:
-
-       ┌───┬────────────────────────────┬─────────────────────────────────┐
-       │Op │           Regex            │           Description           │
-       ├───┼────────────────────────────┼─────────────────────────────────┤
-       │ = │ [ACGTN]+                   │ Identical sequence (long form)  │
-       │ : │ [0-9]+                     │ Identical sequence length       │
-       │ * │ [acgtn][acgtn]             │ Substitution: ref to query      │
-       │ + │ [acgtn]+                   │ Insertion to the reference      │
-       │ - │ [acgtn]+                   │ Deletion from the reference     │
-       │ ~ │ [acgtn]{2}[0-9]+[acgtn]{2} │ Intron length and splice signal │
-       └───┴────────────────────────────┴─────────────────────────────────┘
-
-    Note that the HGVS output isn't necessarily exactly the same as other callers
-    as the CS string tends to find changes leftwards where HGVS is supposed to
-    work rightwards.
-
-    >>> cs_to_hgvs(":10*at:10")
-    'g.11A>T'
-
-    >>> cs_to_hgvs(":10-c:10")
-    'g.11del'
-
-    >>> cs_to_hgvs(":10-ttt:10")
-    'g.11_13del'
-
-    >>> cs_to_hgvs(":10+gac:10")
-    'g.10_11insGAC'
-
-    >>> cs_to_hgvs(":10*at*at*gc*cg")
-    'g.11_14delinsTTCG'
-
-    >>> cs_to_hgvs(":10+a:10*at")
-    'g.[10_11insA;21A>T]'
-
-    >>> cs_to_hgvs(":10-a:10*at")
-    'g.[11del;22A>T]'
-    """
-
-    # XXX doesn't support '~'.
-
-    # XXX consider a different approach to generating HGVS strings
-    # https://github.com/CountESS-Project/countess-minimap2/issues/1
-
-    hgvs_ops = []
-    prefix = "g."
-    if ctg and ctg != 'N/A':
-        prefix = ctg + ":" + prefix
-
-    for op in re.findall(CS_STRING_RE, cs_string.upper()):
-        if op[0] == ":":
-            offset += int(op[1:])
-        elif op[0] == "=":
-            offset += len(op) - 1
-        elif op[0] == "*":
-            # regex can match multiple operations like "*AT*AT*GC"
-            if len(op) > 3:
-                hgvs_ops.append(f"{offset}_{offset+len(op)//3-1}delins{op[2::3]}")
-            else:
-                hgvs_ops.append(f"{offset}{op[1]}>{op[2]}")
-            offset += len(op) // 3
-        elif op[0] == "+":
-            hgvs_ops.append(f"{offset-1}_{offset}ins{op[1:]}")
-        elif op[0] == "-":
-            if len(op) > 2:
-                hgvs_ops.append(f"{offset}_{offset+len(op)-2}del")
-            else:
-                hgvs_ops.append(f"{offset}del")
-            offset += len(op) - 1
-    if len(hgvs_ops) == 0:
-        return prefix + "="
-    elif len(hgvs_ops) == 1:
-        return prefix + hgvs_ops[0]
-    else:
-        return prefix + "[" + ";".join(hgvs_ops) + "]"
 
 
 class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
@@ -133,9 +47,9 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
         "min_length": IntegerParam("Minimum Match Length", 0),
         "drop": BooleanParam("Drop Unmatched", False),
         "location": BooleanParam("Output Location Columns", True),
-        "cigar": BooleanParam("Output Cigar String", True),
+        "cigar": BooleanParam("Output Cigar String", False),
         "cs": BooleanParam("Output CS String", False),
-        "hgvs": BooleanParam("Output HGVS String", False),
+        "hgvs": BooleanParam("Output HGVS", False),
     }
 
     # XXX a shared-memory cache would make a lot of sense
@@ -147,10 +61,11 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
             self.aligner = mappy.Aligner(seq=self.parameters["seq"].value, preset=self.parameters["preset"].value)
         elif self.parameters["ref"].value:
             self.aligner = mappy.Aligner(self.parameters["ref"].value, preset=self.parameters["preset"].value)
+            # TODO check file load successful: self.aligner.seq_names is not None?
         else:
             self.aligner = None
 
-    def output_dict(self, alignment):
+    def output_dict(self, value, alignment):
         d = {}
         prefix = self.parameters["prefix"].value
         if self.parameters["location"].value:
@@ -167,7 +82,8 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
         if self.parameters["cs"].value:
             d[prefix + "_cs"] = alignment.cs if alignment else None
         if self.parameters["hgvs"].value:
-            d[prefix + "_hgvs"] = cs_to_hgvs(alignment.cs, alignment.ctg, alignment.r_st + 1) if alignment else None
+            d[prefix + "_hgvs_g"] = find_variant_string("g.", alignment.tseq, value, alignment.r_st) if alignment else None
+            d[prefix + "_hgvs_p"] = find_variant_string("p.", alignment.tseq, value, alignment.r_st) if alignment else None
         return d
 
     def process_value(self, value: str, logger: Logger):
@@ -176,16 +92,17 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
             return None
 
         prefix = self.parameters["prefix"].value
-        min_length = self.parameters["min_length"].value
+        min_length = abs(self.parameters["min_length"].value)
 
         # XXX only returns first match
-        calculate_cs = self.parameters["cs"].value or self.parameters["hgvs"].value
-        x = self.aligner.map(value, cs=calculate_cs)
+        calculate_cs = self.parameters["cs"].value
+        calculate_tseq = self.parameters["hgvs"].value
+        x = self.aligner.map(value, cs=calculate_cs, tseq=calculate_tseq)
         for z in x:
-            if z.r_en - z.r_st >= min_length:
-                return self.output_dict(z)
+            if abs(z.r_en - z.r_st) >= min_length:
+                return self.output_dict(value, z)
 
         if self.parameters["drop"].value:
             return None
         else:
-            return self.output_dict(None)
+            return self.output_dict(value, None)
