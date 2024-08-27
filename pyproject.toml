@@ -30,7 +30,7 @@ Repository = "https://github.com/CountESS-Project/countess-minimap2.git"
 
 [project.optional-dependencies]
 dev = [
-    "countess[dev]>=0.0.35,<0.1",
+    "countess[dev]>=0.0.66",
 ]
 
 [project.entry-points.countess_plugins]
@@ -42,11 +42,16 @@ readme = { file = "README.md", content-type="text/markdown" }
 
 [tool.pylint]
 disable = [
-    "no-else-return",
+    "c-extension-no-member",
     "fixme",
     "invalid-name",
-    "c-extension-no-member",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "missing-module-docstring",
+    "no-else-return",
+    "too-many-ancestors",
 ]
+max-line-length = 120
 
 [tool.black]
 line-length = 120
