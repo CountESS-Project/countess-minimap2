@@ -1,11 +1,10 @@
 """ CountESS Minimap2 Plugin"""
 
+import logging
 import re
-from typing import Mapping, Optional
+from typing import Optional
 
 import mappy  # type: ignore
-import pandas as pd
-from countess.core.logger import Logger
 from countess.core.parameters import (
     BooleanParam,
     ChoiceParam,
@@ -17,7 +16,9 @@ from countess.core.parameters import (
 )
 from countess.core.plugins import PandasTransformSingleToDictPlugin
 
-VERSION = "0.0.13"
+logger = logging.getLogger(__name__)
+
+VERSION = "0.0.14"
 
 CS_STRING_RE = r"(=[ACTGTN]+|:[0-9]+|(?:\*[ACGTN][ACGTN])+|\+[ACGTN]+|-[ACGTN]+)"
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
@@ -78,7 +79,7 @@ def cs_to_hgvs(cs_string: str, ctg: str = "", offset: int = 1) -> str:
 
     hgvs_ops = []
     prefix = "g."
-    if ctg and ctg != 'N/A':
+    if ctg and ctg != "N/A":
         prefix = ctg + ":" + prefix
 
     for op in re.findall(CS_STRING_RE, cs_string.upper()):
@@ -119,73 +120,70 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
     additional = "Note that the CIGAR string doesn't always show all variants."
     version = VERSION
     link = "https://github.com/CountESS-Project/countess-minimap2#readme"
-    tags = ['bioinformatics']
+    tags = ["bioinformatics"]
 
     FILE_TYPES = [("MMI", "*.mmi"), ("FASTA", "*.fa *.fasta *.fa.gz *.fasta.gz")]
     CHARACTER_SET = set(["A", "C", "G", "T"])
 
-    parameters = {
-        "column": ColumnChoiceParam("Input Column", "sequence"),
-        "prefix": StringParam("Output Column Prefix", "mm"),
-        "ref": FileParam("Ref FA / Ref MMI", file_types=FILE_TYPES),
-        "seq": StringCharacterSetParam("*OR* Ref Sequence", character_set=CHARACTER_SET),
-        "preset": ChoiceParam("Preset", "sr", choices=MM2_PRESET_CHOICES),
-        "min_length": IntegerParam("Minimum Match Length", 0),
-        "drop": BooleanParam("Drop Unmatched", False),
-        "location": BooleanParam("Output Location Columns", True),
-        "cigar": BooleanParam("Output Cigar String", True),
-        "cs": BooleanParam("Output CS String", False),
-        "hgvs": BooleanParam("Output HGVS String", False),
-    }
+    column = ColumnChoiceParam("Input Column", "sequence")
+    prefix = StringParam("Output Column Prefix", "mm")
+    ref = FileParam("Ref FA / Ref MMI", file_types=FILE_TYPES)
+    seq = StringCharacterSetParam("*OR* Ref Sequence", character_set=CHARACTER_SET)
+    preset = ChoiceParam("Preset", "sr", choices=MM2_PRESET_CHOICES)
+    min_length = IntegerParam("Minimum Match Length", 0)
+    drop = BooleanParam("Drop Unmatched", False)
+    location = BooleanParam("Output Location Columns", True)
+    cigar = BooleanParam("Output Cigar String", False)
+    cs = BooleanParam("Output CS String", False)
+    hgvs = BooleanParam("Output HGVS", False)
 
     # XXX a shared-memory cache would make a lot of sense
     # here ...
     aligner = None
 
-    def prepare(self, sources: list[str], row_limit: Optional[int]):
-        if self.parameters["seq"].value:
-            self.aligner = mappy.Aligner(seq=self.parameters["seq"].value, preset=self.parameters["preset"].value)
-        elif self.parameters["ref"].value:
-            self.aligner = mappy.Aligner(self.parameters["ref"].value, preset=self.parameters["preset"].value)
+    def prepare(self, sources: list[str], row_limit: Optional[int] = None):
+        if self.seq:
+            self.aligner = mappy.Aligner(seq=self.seq.value, preset=self.preset.value)
+        elif self.ref:
+            self.aligner = mappy.Aligner(self.ref.value, preset=self.preset.value)
+            # TODO check file load successful: self.aligner.seq_names is not None?
         else:
             self.aligner = None
 
     def output_dict(self, alignment):
         d = {}
-        prefix = self.parameters["prefix"].value
-        if self.parameters["location"].value:
+        if self.location:
             d.update(
                 {
-                    prefix + "_ctg": alignment.ctg if alignment else None,
-                    prefix + "_r_st": alignment.r_st if alignment else None,
-                    prefix + "_r_en": alignment.r_en if alignment else None,
-                    prefix + "_strand": alignment.strand if alignment else None,
+                    self.prefix + "_ctg": alignment.ctg if alignment else None,
+                    self.prefix + "_r_st": alignment.r_st if alignment else None,
+                    self.prefix + "_r_en": alignment.r_en if alignment else None,
+                    self.prefix + "_strand": alignment.strand if alignment else None,
                 }
             )
-        if self.parameters["cigar"].value:
-            d[prefix + "_cigar"] = alignment.cigar_str if alignment else None
-        if self.parameters["cs"].value:
-            d[prefix + "_cs"] = alignment.cs if alignment else None
-        if self.parameters["hgvs"].value:
-            d[prefix + "_hgvs"] = cs_to_hgvs(alignment.cs, alignment.ctg, alignment.r_st + 1) if alignment else None
+        if self.cigar:
+            d[self.prefix + "_cigar"] = alignment.cigar_str if alignment else None
+        if self.cs:
+            d[self.prefix + "_cs"] = alignment.cs if alignment else None
+        if self.hgvs:
+            d[self.prefix + "_hgvs"] = (
+                cs_to_hgvs(alignment.cs, alignment.ctg, alignment.r_st + 1) if alignment else None
+            )
         return d
 
-    def process_value(self, value: str, logger: Logger):
-        assert isinstance(self.parameters["column"], ColumnChoiceParam)
+    def process_value(self, value: str):
         if not self.aligner:
             return None
 
-        prefix = self.parameters["prefix"].value
-        min_length = self.parameters["min_length"].value
+        min_length = abs(self.min_length.value)
 
         # XXX only returns first match
-        calculate_cs = self.parameters["cs"].value or self.parameters["hgvs"].value
-        x = self.aligner.map(value, cs=calculate_cs)
+        x = self.aligner.map(value, cs=self.cs or self.hgvs)
         for z in x:
             if z.r_en - z.r_st >= min_length:
                 return self.output_dict(z)
 
-        if self.parameters["drop"].value:
+        if self.drop:
             return None
         else:
             return self.output_dict(None)
