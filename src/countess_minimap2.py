@@ -18,7 +18,7 @@ from countess.utils.variant import find_variant_string
 
 logger = logging.getLogger(__name__)
 
-VERSION = "0.0.14"
+VERSION = "0.0.15"
 
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
 
@@ -79,12 +79,18 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
         if self.cs:
             d[self.prefix + "_cs"] = alignment.cs if alignment else None
         if self.hgvs:
-            d[self.prefix + "_hgvs_g"] = (
-                find_variant_string("g.", alignment.tseq, value, offset=alignment.r_st) if alignment else None
-            )
-            d[self.prefix + "_hgvs_p"] = (
-                find_variant_string("p.", alignment.tseq, value, offset=alignment.r_st) if alignment else None
-            )
+            if alignment:
+                reference = self.aligner.seq(alignment.ctg)[alignment.r_st:alignment.r_en]
+                d[self.prefix + "_hgvs_g"] = (
+                    find_variant_string("g.", reference, value, offset=alignment.r_st)
+                )
+                d[self.prefix + "_hgvs_p"] = (
+                    find_variant_string("p.", reference, value, offset=alignment.r_st)
+                )
+            else:
+                d[self.prefix + "_hgvs_g"] = None
+                d[self.prefix + "_hgvs_p"] = None
+
         return d
 
     def process_value(self, value: str):
@@ -93,7 +99,7 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
 
         min_length = abs(self.min_length.value)
 
-        x = self.aligner.map(value, cs=self.cs.value, tseq=self.hgvs.value)
+        x = self.aligner.map(value, cs=self.cs.value)
         # XXX only returns first match
         for z in x:
             if abs(z.r_en - z.r_st) >= min_length:
