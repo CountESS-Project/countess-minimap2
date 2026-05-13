@@ -10,11 +10,9 @@ maintainers = [
 ]
 description = "Sequence Alignment Plugin for CountESS, based in Minimap2"
 requires-python = ">=3.10"
-license = { text = "BSD-3-Clause" }
 classifiers = [
     'Development Status :: 2 - Pre-Alpha',
     'Intended Audience :: Science/Research',
-    'License :: OSI Approved :: BSD License',
     'Operating System :: OS Independent',
     'Programming Language :: Python :: 3',
     'Topic :: Scientific/Engineering :: Bio-Informatics',
@@ -23,6 +21,7 @@ dependencies = [
     "countess>=0.1.21",
     "mappy~=2.28",
 ]
+license = "BSD-3-Clause"
 
 [project.urls]
 Homepage = "https://github.com/CountESS-Project/countess-minimap2"
@@ -31,6 +30,8 @@ Repository = "https://github.com/CountESS-Project/countess-minimap2.git"
 [project.optional-dependencies]
 dev = [
     "countess[dev]>=0.1.21",
+    "build~=1.2.2",
+    "twine~=6.1.0",
 ]
 
 [project.entry-points.countess_plugins]
