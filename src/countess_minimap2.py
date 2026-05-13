@@ -1,7 +1,7 @@
 """ CountESS Minimap2 Plugin"""
 
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 
 import mappy  # type: ignore
 from countess.core.parameters import (
@@ -13,17 +13,17 @@ from countess.core.parameters import (
     StringCharacterSetParam,
     StringParam,
 )
-from countess.core.plugins import PandasTransformSingleToDictPlugin
+from countess.core.plugins import DuckdbTransformPlugin
 from countess.utils.variant import find_variant_string
 
 logger = logging.getLogger(__name__)
 
-VERSION = "0.0.15"
+VERSION = "0.1.1"
 
 MM2_PRESET_CHOICES = ["sr", "map-pb", "map-ont", "asm5", "asm10", "splice"]
 
 
-class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
+class MiniMap2Plugin(DuckdbTransformPlugin):
     """Turns a DNA sequence into a HGVS variant code"""
 
     # XXX what is up with the CIGAR string not showing all variants?
@@ -54,7 +54,7 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
     # here ...
     aligner = None
 
-    def prepare(self, sources: list[str], row_limit: Optional[int] = None):
+    def prepare(self, *_):
         if self.seq:
             self.aligner = mappy.Aligner(seq=self.seq.value, preset=self.preset.value)
         elif self.ref:
@@ -63,49 +63,46 @@ class MiniMap2Plugin(PandasTransformSingleToDictPlugin):
         else:
             self.aligner = None
 
-    def output_dict(self, value, alignment):
-        d = {}
+    def add_fields(self):
+        cols = {}
         if self.location:
-            d.update(
-                {
-                    self.prefix + "_ctg": alignment.ctg if alignment else None,
-                    self.prefix + "_r_st": alignment.r_st if alignment else None,
-                    self.prefix + "_r_en": alignment.r_en if alignment else None,
-                    self.prefix + "_strand": alignment.strand if alignment else None,
-                }
-            )
+            cols.update({
+                self.prefix + "_ctg": str,
+                self.prefix + "_r_st": int,
+                self.prefix + "_r_en": int,
+                self.prefix + "_strand": int,
+            })
         if self.cigar:
-            d[self.prefix + "_cigar"] = alignment.cigar_str if alignment else None
+            cols[self.prefix + "_cigar"] = str
         if self.cs:
-            d[self.prefix + "_cs"] = alignment.cs if alignment else None
+            cols[self.prefix + "_cs"] = str
         if self.hgvs:
-            if alignment:
-                reference = self.aligner.seq(alignment.ctg)[alignment.r_st:alignment.r_en]
-                d[self.prefix + "_hgvs_g"] = (
-                    find_variant_string("g.", reference, value, offset=alignment.r_st)
-                )
-                d[self.prefix + "_hgvs_p"] = (
-                    find_variant_string("p.", reference, value, offset=alignment.r_st)
-                )
-            else:
-                d[self.prefix + "_hgvs_g"] = None
-                d[self.prefix + "_hgvs_p"] = None
+            cols[self.prefix + "_hgvs_g"] = str
+            cols[self.prefix + "_hgvs_p"] = str
+        return cols
 
-        return d
-
-    def process_value(self, value: str):
-        if not self.aligner:
+    def transform(self, data: dict[str, Any]) -> Optional[Dict[str, Any]]:
+        value = data[self.column.value]
+        min_length = int(self.min_length.value)
+        alignments = list(self.aligner.map(value, cs=self.cs.value))
+        if not alignments:
             return None
-
-        min_length = abs(self.min_length.value)
-
-        x = self.aligner.map(value, cs=self.cs.value)
-        # XXX only returns first match
-        for z in x:
-            if abs(z.r_en - z.r_st) >= min_length:
-                return self.output_dict(value, z)
-
-        if self.drop:
-            return None
-        else:
-            return self.output_dict(value, None)
+        for alignment in alignments:
+            if abs(alignment.r_en - alignment.r_st) >= min_length:
+                if self.location:
+                    data.update({
+                        self.prefix + "_ctg": alignment.ctg,
+                        self.prefix + "_r_st": alignment.r_st,
+                        self.prefix + "_r_en": alignment.r_en,
+                        self.prefix + "_strand": alignment.strand,
+                    })
+                if self.cigar:
+                    data[self.prefix + "_cigar"] = alignment.cigar_str
+                if self.cs:
+                    data[self.prefix + "_cs"] = alignment.cs
+                if self.hgvs:
+                    reference = self.seq.value or self.aligner.seq(alignment.ctg)[alignment.r_st:alignment.r_en]
+                    data[self.prefix + "_hgvs_g"] = find_variant_string("g.", reference, value, offset=alignment.r_st)
+                    data[self.prefix + "_hgvs_p"] = find_variant_string("p.", reference, value, offset=alignment.r_st)
+                return data
+        return None

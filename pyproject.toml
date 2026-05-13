@@ -20,7 +20,7 @@ classifiers = [
     'Topic :: Scientific/Engineering :: Bio-Informatics',
 ]
 dependencies = [
-    "countess>=0.0.83",
+    "countess>=0.1.21",
     "mappy~=2.28",
 ]
 
@@ -30,7 +30,7 @@ Repository = "https://github.com/CountESS-Project/countess-minimap2.git"
 
 [project.optional-dependencies]
 dev = [
-    "countess[dev]>=0.0.83",
+    "countess[dev]>=0.1.21",
 ]
 
 [project.entry-points.countess_plugins]
